@@ -66,7 +66,7 @@ class SUW_Auto_Updater {
 
         $release = json_decode(wp_remote_retrieve_body($response), true);
 
-        if (empty($release)) {
+        if (empty($release) || !isset($release['tag_name'])) {
             return false;
         }
 
@@ -82,16 +82,21 @@ class SUW_Auto_Updater {
         }
 
         // Fallback: Source Code ZIP
-        if (empty($download_url)) {
+        if (empty($download_url) && isset($release['zipball_url'])) {
             $download_url = $release['zipball_url'];
+        }
+
+        // Wenn immer noch kein Download URL, abbrechen
+        if (empty($download_url)) {
+            return false;
         }
 
         $info = array(
             'version' => ltrim($release['tag_name'], 'v'),
             'download_url' => $download_url,
-            'body' => $release['body'],
-            'published_at' => $release['published_at'],
-            'html_url' => $release['html_url']
+            'body' => $release['body'] ?? '',
+            'published_at' => $release['published_at'] ?? '',
+            'html_url' => $release['html_url'] ?? ''
         );
 
         // Cache für 12 Stunden

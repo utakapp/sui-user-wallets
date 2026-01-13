@@ -3,7 +3,7 @@
  * Plugin Name: Sui User Wallets
  * Plugin URI: https://github.com/utakapp/sui-user-wallets
  * Description: Automatische Sui Wallet-Verwaltung für WordPress User - Custodial Wallets
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: utakapp
  * Author URI: https://github.com/utakapp
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin Konstanten
-define('SUW_VERSION', '1.0.2');
+define('SUW_VERSION', '1.0.3');
 define('SUW_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SUW_PLUGIN_URL', plugin_dir_url(__FILE__));
 
