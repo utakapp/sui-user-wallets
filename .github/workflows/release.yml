@@ -1,0 +1,81 @@
+name: Create Plugin Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Update version in plugin file
+        run: |
+          sed -i "s/Version: .*/Version: ${{ steps.get_version.outputs.VERSION }}/" wordpress-plugin-wallet/sui-user-wallets.php
+          sed -i "s/define('SUW_VERSION', '.*');/define('SUW_VERSION', '${{ steps.get_version.outputs.VERSION }}');/" wordpress-plugin-wallet/sui-user-wallets.php
+
+      - name: Create plugin ZIP
+        run: |
+          # Erstelle temporären Ordner mit Plugin-Name
+          mkdir -p sui-user-wallets-temp/sui-user-wallets
+
+          # Kopiere alle Dateien (außer excludierte)
+          rsync -av --exclude='.git*' \
+            --exclude='node_modules' \
+            --exclude='.DS_Store' \
+            --exclude='debug-test.php' \
+            --exclude='.github' \
+            --exclude='deploy.sh' \
+            --exclude='.env.deploy*' \
+            --exclude='Makefile' \
+            wordpress-plugin-wallet/ sui-user-wallets-temp/sui-user-wallets/
+
+          # Erstelle ZIP
+          cd sui-user-wallets-temp
+          zip -r ../sui-user-wallets-${{ steps.get_version.outputs.VERSION }}.zip sui-user-wallets
+          cd ..
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: sui-user-wallets-${{ steps.get_version.outputs.VERSION }}.zip
+          body: |
+            ## Sui User Wallets v${{ steps.get_version.outputs.VERSION }}
+
+            ### Installation
+            1. Download `sui-user-wallets-${{ steps.get_version.outputs.VERSION }}.zip`
+            2. WordPress Admin → Plugins → Add New → Upload Plugin
+            3. Wähle ZIP-Datei aus und klicke "Install Now"
+            4. Aktiviere das Plugin
+
+            ### Changelog
+            See CHANGELOG.md for details
+
+            ### Requirements
+            - WordPress 5.0+
+            - PHP 7.4+
+            - Vercel API deployed
+
+            ### Documentation
+            - [README.md](README.md)
+            - [QUICK_START.md](QUICK_START.md)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy to production (optional)
+        if: ${{ secrets.AUTO_DEPLOY_PRODUCTION == 'true' }}
+        uses: SamKirkland/FTP-Deploy-Action@4.3.3
+        with:
+          server: ${{ secrets.PROD_FTP_SERVER }}
+          username: ${{ secrets.PROD_FTP_USERNAME }}
+          password: ${{ secrets.PROD_FTP_PASSWORD }}
+          local-dir: ./wordpress-plugin-wallet/
+          server-dir: /wp-content/plugins/sui-user-wallets/

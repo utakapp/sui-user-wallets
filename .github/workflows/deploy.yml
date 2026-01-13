@@ -1,0 +1,61 @@
+name: Deploy WordPress Plugin
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'wordpress-plugin-wallet/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment Environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set environment
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ENV=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          else
+            echo "ENV=staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy via SFTP
+        uses: SamKirkland/FTP-Deploy-Action@4.3.3
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./wordpress-plugin-wallet/
+          server-dir: /wp-content/plugins/sui-user-wallets/
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/.DS_Store
+            **/debug-test.php
+            **/.github/**
+
+      - name: Notify Success
+        if: success()
+        run: |
+          echo "✅ Plugin deployed successfully to ${{ steps.set-env.outputs.ENV }}"
+
+      - name: Notify Failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed"
