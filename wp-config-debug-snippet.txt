@@ -1,0 +1,26 @@
+/**
+ * WordPress Debug-Modus
+ *
+ * ANLEITUNG:
+ * 1. Öffne wp-config.php auf deinem Server
+ * 2. Suche die Zeile: define( 'WP_DEBUG', false );
+ * 3. Ersetze diese Zeile (und alles danach bis zu "That's all") mit diesem Code:
+ */
+
+// Debug aktivieren
+define( 'WP_DEBUG', true );
+
+// Fehler in Datei loggen (nicht auf Bildschirm)
+define( 'WP_DEBUG_LOG', true );
+
+// Fehler NICHT auf Bildschirm anzeigen (wichtig für Production!)
+define( 'WP_DEBUG_DISPLAY', false );
+@ini_set( 'display_errors', 0 );
+
+// JavaScript & CSS Debug (optional, nur für Entwicklung)
+define( 'SCRIPT_DEBUG', true );
+
+// Speichere Datenbankabfragen (optional, nur bei Bedarf)
+// define( 'SAVEQUERIES', true );
+
+/* That's all, stop editing! Happy publishing. */

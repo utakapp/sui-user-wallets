@@ -3,7 +3,7 @@
  * Plugin Name: Sui User Wallets
  * Plugin URI: https://github.com/utakapp/sui-user-wallets
  * Description: Automatische Sui Wallet-Verwaltung für WordPress User - Custodial Wallets
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author: utakapp
  * Author URI: https://github.com/utakapp
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin Konstanten
-define('SUW_VERSION', '1.0.1');
+define('SUW_VERSION', '1.0.2');
 define('SUW_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SUW_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -50,6 +50,7 @@ class Sui_User_Wallets {
         // Hooks
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
+        add_action('admin_notices', array($this, 'check_database_table'));
         add_action('show_user_profile', array($this, 'show_user_wallet_fields'));
         add_action('edit_user_profile', array($this, 'show_user_wallet_fields'));
         add_action('user_register', array($this, 'auto_create_wallet_on_registration'));
@@ -58,6 +59,7 @@ class Sui_User_Wallets {
         add_action('wp_ajax_suw_create_wallet', array($this, 'ajax_create_wallet'));
         add_action('wp_ajax_suw_export_private_key', array($this, 'ajax_export_private_key'));
         add_action('wp_ajax_suw_get_wallet_balance', array($this, 'ajax_get_wallet_balance'));
+        add_action('wp_ajax_suw_fix_database_table', array($this, 'ajax_fix_database_table'));
 
         // Shortcodes
         add_shortcode('sui_user_wallet', array($this, 'wallet_shortcode'));
@@ -103,6 +105,99 @@ class Sui_User_Wallets {
 
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+    }
+
+    // Prüfe ob Datenbanktabelle existiert
+    private function table_exists() {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'sui_user_wallets';
+        $result = $wpdb->get_var("SHOW TABLES LIKE '$table_name'");
+        return ($result === $table_name);
+    }
+
+    // Admin Notice wenn Tabelle fehlt
+    public function check_database_table() {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        if ($this->table_exists()) {
+            return;
+        }
+
+        ?>
+        <div class="notice notice-error is-dismissible">
+            <p>
+                <strong>Sui User Wallets:</strong> Datenbanktabelle fehlt!
+                Das Plugin kann keine Wallets speichern.
+            </p>
+            <p>
+                <button type="button" class="button button-primary" id="suw-fix-database">
+                    Jetzt reparieren
+                </button>
+                <span id="suw-fix-status" style="margin-left: 10px;"></span>
+            </p>
+        </div>
+        <script>
+        jQuery(document).ready(function($) {
+            $('#suw-fix-database').on('click', function() {
+                var $btn = $(this);
+                var $status = $('#suw-fix-status');
+
+                $btn.prop('disabled', true).text('Repariere...');
+                $status.html('<span style="color: #999;">⏳ Erstelle Tabelle...</span>');
+
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'suw_fix_database_table',
+                        _wpnonce: '<?php echo wp_create_nonce('suw_fix_database'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $status.html('<span style="color: green;">✅ ' + response.data.message + '</span>');
+                            setTimeout(function() {
+                                location.reload();
+                            }, 1500);
+                        } else {
+                            $status.html('<span style="color: red;">❌ ' + response.data.message + '</span>');
+                            $btn.prop('disabled', false).text('Erneut versuchen');
+                        }
+                    },
+                    error: function() {
+                        $status.html('<span style="color: red;">❌ AJAX Fehler</span>');
+                        $btn.prop('disabled', false).text('Erneut versuchen');
+                    }
+                });
+            });
+        });
+        </script>
+        <?php
+    }
+
+    // AJAX: Datenbanktabelle erstellen
+    public function ajax_fix_database_table() {
+        check_ajax_referer('suw_fix_database');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Keine Berechtigung'));
+        }
+
+        // Prüfe ob Tabelle bereits existiert
+        if ($this->table_exists()) {
+            wp_send_json_success(array('message' => 'Tabelle existiert bereits!'));
+        }
+
+        // Erstelle Tabelle
+        $this->create_tables();
+
+        // Prüfe erneut
+        if ($this->table_exists()) {
+            wp_send_json_success(array('message' => 'Tabelle erfolgreich erstellt!'));
+        } else {
+            wp_send_json_error(array('message' => 'Fehler beim Erstellen. Prüfe Datenbank-Berechtigungen.'));
+        }
     }
 
     // Setze Default-Optionen
