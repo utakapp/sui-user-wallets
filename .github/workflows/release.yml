@@ -19,8 +19,8 @@ jobs:
 
       - name: Update version in plugin file
         run: |
-          sed -i "s/Version: .*/Version: ${{ steps.get_version.outputs.VERSION }}/" wordpress-plugin-wallet/sui-user-wallets.php
-          sed -i "s/define('SUW_VERSION', '.*');/define('SUW_VERSION', '${{ steps.get_version.outputs.VERSION }}');/" wordpress-plugin-wallet/sui-user-wallets.php
+          sed -i "s/Version: .*/Version: ${{ steps.get_version.outputs.VERSION }}/" sui-user-wallets.php
+          sed -i "s/define('SUW_VERSION', '.*');/define('SUW_VERSION', '${{ steps.get_version.outputs.VERSION }}');/" sui-user-wallets.php
 
       - name: Create plugin ZIP
         run: |
@@ -36,7 +36,7 @@ jobs:
             --exclude='deploy.sh' \
             --exclude='.env.deploy*' \
             --exclude='Makefile' \
-            wordpress-plugin-wallet/ sui-user-wallets-temp/sui-user-wallets/
+            ./ sui-user-wallets-temp/sui-user-wallets/
 
           # Erstelle ZIP
           cd sui-user-wallets-temp
@@ -77,5 +77,5 @@ jobs:
           server: ${{ secrets.PROD_FTP_SERVER }}
           username: ${{ secrets.PROD_FTP_USERNAME }}
           password: ${{ secrets.PROD_FTP_PASSWORD }}
-          local-dir: ./wordpress-plugin-wallet/
+          local-dir: ./
           server-dir: /wp-content/plugins/sui-user-wallets/
