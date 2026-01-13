@@ -3,7 +3,7 @@
  * Plugin Name: Sui User Wallets
  * Plugin URI: https://github.com/utakapp/sui-user-wallets
  * Description: Automatische Sui Wallet-Verwaltung für WordPress User - Custodial Wallets
- * Version: 1.0.3
+ * Version: 1.0.4
  * Author: utakapp
  * Author URI: https://github.com/utakapp
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin Konstanten
-define('SUW_VERSION', '1.0.3');
+define('SUW_VERSION', '1.0.4');
 define('SUW_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SUW_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -60,6 +60,7 @@ class Sui_User_Wallets {
         add_action('wp_ajax_suw_export_private_key', array($this, 'ajax_export_private_key'));
         add_action('wp_ajax_suw_get_wallet_balance', array($this, 'ajax_get_wallet_balance'));
         add_action('wp_ajax_suw_fix_database_table', array($this, 'ajax_fix_database_table'));
+        add_action('wp_ajax_suw_dismiss_v104_notice', array($this, 'ajax_dismiss_v104_notice'));
 
         // Shortcodes
         add_shortcode('sui_user_wallet', array($this, 'wallet_shortcode'));
@@ -119,6 +120,29 @@ class Sui_User_Wallets {
     public function check_database_table() {
         if (!current_user_can('manage_options')) {
             return;
+        }
+
+        // Test-Notice für v1.0.4 Auto-Update
+        $dismissed = get_option('suw_v104_notice_dismissed', false);
+        if (!$dismissed && version_compare(SUW_VERSION, '1.0.4', '>=')) {
+            ?>
+            <div class="notice notice-success is-dismissible" data-dismissible="suw-v104-notice">
+                <p>
+                    <strong>🎉 Sui User Wallets v1.0.4:</strong>
+                    Auto-Update erfolgreich! Das Plugin wurde automatisch aktualisiert.
+                    <a href="https://github.com/utakapp/sui-user-wallets/releases/tag/v1.0.4" target="_blank">Release Notes</a>
+                </p>
+            </div>
+            <script>
+            jQuery(document).ready(function($) {
+                $(document).on('click', '[data-dismissible="suw-v104-notice"] .notice-dismiss', function() {
+                    $.post(ajaxurl, {
+                        action: 'suw_dismiss_v104_notice'
+                    });
+                });
+            });
+            </script>
+            <?php
         }
 
         if ($this->table_exists()) {
@@ -198,6 +222,15 @@ class Sui_User_Wallets {
         } else {
             wp_send_json_error(array('message' => 'Fehler beim Erstellen. Prüfe Datenbank-Berechtigungen.'));
         }
+    }
+
+    // AJAX: v1.0.4 Notice dismissal
+    public function ajax_dismiss_v104_notice() {
+        if (!current_user_can('manage_options')) {
+            wp_die();
+        }
+        update_option('suw_v104_notice_dismissed', true);
+        wp_die();
     }
 
     // Setze Default-Optionen
