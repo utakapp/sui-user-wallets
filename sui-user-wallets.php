@@ -3,7 +3,7 @@
  * Plugin Name: Sui User Wallets
  * Plugin URI: https://github.com/utakapp/sui-user-wallets
  * Description: Automatische Sui Wallet-Verwaltung für WordPress User - Custodial Wallets
- * Version: 1.0.7
+ * Version: 1.0.8
  * Author: utakapp
  * Author URI: https://github.com/utakapp
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin Konstanten
-define('SUW_VERSION', '1.0.7');
+define('SUW_VERSION', '1.0.8');
 define('SUW_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SUW_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -60,7 +60,13 @@ class Sui_User_Wallets {
         add_action('wp_ajax_suw_export_private_key', array($this, 'ajax_export_private_key'));
         add_action('wp_ajax_suw_get_wallet_balance', array($this, 'ajax_get_wallet_balance'));
         add_action('wp_ajax_suw_fix_database_table', array($this, 'ajax_fix_database_table'));
-        add_action('wp_ajax_suw_dismiss_v107_notice', array($this, 'ajax_dismiss_v107_notice'));
+        add_action('wp_ajax_suw_dismiss_v108_notice', array($this, 'ajax_dismiss_v108_notice'));
+        add_action('wp_ajax_suw_bulk_balance_check', array($this, 'ajax_bulk_balance_check'));
+
+        // Admin Post Handlers
+        add_action('admin_post_suw_bulk_export_csv', array($this, 'handle_bulk_export_csv'));
+        add_action('admin_post_suw_bulk_export_keys', array($this, 'handle_bulk_export_keys'));
+        add_action('admin_post_suw_download_backup', array($this, 'handle_download_backup'));
 
         // Shortcodes
         add_shortcode('sui_user_wallet', array($this, 'wallet_shortcode'));
@@ -72,6 +78,12 @@ class Sui_User_Wallets {
         require_once SUW_PLUGIN_DIR . 'includes/class-wallet-crypto.php';
         require_once SUW_PLUGIN_DIR . 'includes/class-loyalty-integration.php';
         require_once SUW_PLUGIN_DIR . 'includes/class-auto-updater.php';
+        require_once SUW_PLUGIN_DIR . 'includes/class-dashboard.php';
+        require_once SUW_PLUGIN_DIR . 'includes/class-bulk-operations.php';
+        require_once SUW_PLUGIN_DIR . 'includes/class-email-notifications.php';
+        require_once SUW_PLUGIN_DIR . 'includes/class-transaction-history.php';
+        require_once SUW_PLUGIN_DIR . 'includes/class-multi-wallet.php';
+        require_once SUW_PLUGIN_DIR . 'includes/class-backup-restore.php';
     }
 
     // Plugin Aktivierung
@@ -123,21 +135,21 @@ class Sui_User_Wallets {
         }
 
         // Success Notice für Auto-Update
-        $dismissed = get_option('suw_v107_notice_dismissed', false);
-        if (!$dismissed && version_compare(SUW_VERSION, '1.0.7', '>=')) {
+        $dismissed = get_option('suw_v108_notice_dismissed', false);
+        if (!$dismissed && version_compare(SUW_VERSION, '1.0.8', '>=')) {
             ?>
-            <div class="notice notice-success is-dismissible" data-dismissible="suw-v107-notice">
+            <div class="notice notice-success is-dismissible" data-dismissible="suw-v108-notice">
                 <p>
-                    <strong>🎉 Sui User Wallets v1.0.7:</strong>
-                    Auto-Update erfolgreich! Neue Dokumentation: CLAUDE_ONBOARDING.md für neue Team-Mitglieder.
-                    <a href="https://github.com/utakapp/sui-user-wallets/releases/tag/v1.0.7" target="_blank">Release Notes</a>
+                    <strong>🎉 Sui User Wallets v1.0.8:</strong>
+                    Große Erweiterung mit 10 neuen Features! Dashboard, Bulk Operations, Backup/Restore, Email Notifications, Transaction History, Multi-Wallet Support, PHPUnit Tests und mehr.
+                    <a href="https://github.com/utakapp/sui-user-wallets/releases/tag/v1.0.8" target="_blank">Release Notes</a>
                 </p>
             </div>
             <script>
             jQuery(document).ready(function($) {
-                $(document).on('click', '[data-dismissible="suw-v107-notice"] .notice-dismiss', function() {
+                $(document).on('click', '[data-dismissible="suw-v108-notice"] .notice-dismiss', function() {
                     $.post(ajaxurl, {
-                        action: 'suw_dismiss_v107_notice'
+                        action: 'suw_dismiss_v108_notice'
                     });
                 });
             });
@@ -224,12 +236,12 @@ class Sui_User_Wallets {
         }
     }
 
-    // AJAX: v1.0.7 Notice dismissal
-    public function ajax_dismiss_v107_notice() {
+    // AJAX: v1.0.8 Notice dismissal
+    public function ajax_dismiss_v108_notice() {
         if (!current_user_can('manage_options')) {
             wp_die();
         }
-        update_option('suw_v107_notice_dismissed', true);
+        update_option('suw_v108_notice_dismissed', true);
         wp_die();
     }
 
@@ -255,11 +267,38 @@ class Sui_User_Wallets {
 
         add_submenu_page(
             'sui-user-wallets',
+            'Dashboard',
+            'Dashboard',
+            'manage_options',
+            'sui-dashboard',
+            array($this, 'dashboard_page')
+        );
+
+        add_submenu_page(
+            'sui-user-wallets',
             'All Wallets',
             'All Wallets',
             'manage_options',
             'sui-all-wallets',
             array($this, 'all_wallets_page')
+        );
+
+        add_submenu_page(
+            'sui-user-wallets',
+            'Bulk Operations',
+            'Bulk Operations',
+            'manage_options',
+            'sui-bulk-operations',
+            array($this, 'bulk_operations_page')
+        );
+
+        add_submenu_page(
+            'sui-user-wallets',
+            'Backup & Restore',
+            'Backup & Restore',
+            'manage_options',
+            'sui-backup-restore',
+            array($this, 'backup_restore_page')
         );
     }
 
@@ -586,6 +625,10 @@ class Sui_User_Wallets {
 
         if ($result['success']) {
             error_log('[Sui User Wallets] Auto-created wallet for user ' . $user_id . ': ' . $result['address']);
+
+            // Send email notification
+            $email_notifications = new SUW_Email_Notifications();
+            $email_notifications->send_wallet_created_email($user_id, $result['address']);
         } else {
             error_log('[Sui User Wallets] Failed to auto-create wallet for user ' . $user_id . ': ' . $result['error']);
         }
@@ -681,6 +724,66 @@ class Sui_User_Wallets {
         </div>
         <?php
         return ob_get_clean();
+    }
+
+    // Dashboard Page
+    public function dashboard_page() {
+        $dashboard = new SUW_Dashboard();
+        $dashboard->render_dashboard();
+    }
+
+    // Bulk Operations Page
+    public function bulk_operations_page() {
+        $bulk_ops = new SUW_Bulk_Operations();
+        $bulk_ops->render_bulk_operations_page();
+    }
+
+    // Backup & Restore Page
+    public function backup_restore_page() {
+        $backup = new SUW_Backup_Restore();
+        $backup->render_backup_page();
+    }
+
+    // AJAX: Bulk Balance Check
+    public function ajax_bulk_balance_check() {
+        $bulk_ops = new SUW_Bulk_Operations();
+        $bulk_ops->ajax_bulk_balance_check();
+    }
+
+    // Admin Post: Bulk Export CSV
+    public function handle_bulk_export_csv() {
+        $bulk_ops = new SUW_Bulk_Operations();
+        $bulk_ops->handle_bulk_export_csv();
+    }
+
+    // Admin Post: Bulk Export Keys
+    public function handle_bulk_export_keys() {
+        $bulk_ops = new SUW_Bulk_Operations();
+        $bulk_ops->handle_bulk_export_keys();
+    }
+
+    // Admin Post: Download Backup
+    public function handle_download_backup() {
+        check_admin_referer('suw_download_backup');
+
+        if (!current_user_can('manage_options')) {
+            wp_die('Unauthorized');
+        }
+
+        $file = sanitize_file_name($_GET['file']);
+        $upload_dir = wp_upload_dir();
+        $backup_dir = $upload_dir['basedir'] . '/sui-wallet-backups';
+        $backup_file = $backup_dir . '/' . $file;
+
+        if (!file_exists($backup_file) || strpos(realpath($backup_file), realpath($backup_dir)) !== 0) {
+            wp_die('Invalid backup file');
+        }
+
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename=' . $file);
+        header('Content-Length: ' . filesize($backup_file));
+        readfile($backup_file);
+        exit;
     }
 }
 
