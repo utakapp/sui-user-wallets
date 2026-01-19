@@ -582,7 +582,7 @@ class Sui_User_Wallets {
                 $.post(ajaxurl, {
                     action: 'suw_export_private_key',
                     user_id: <?php echo $user->ID; ?>,
-                    nonce: '<?php echo wp_create_nonce('suw_admin_nonce'); ?>'
+                    nonce: '<?php echo wp_create_nonce('suw_user_nonce'); ?>'
                 }, function(response) {
                     if (response.success) {
                         container.find('textarea').val(response.data.private_key);
@@ -656,17 +656,19 @@ class Sui_User_Wallets {
 
     // AJAX: Exportiere Private Key
     public function ajax_export_private_key() {
-        check_ajax_referer('suw_admin_nonce', 'nonce');
+        check_ajax_referer('suw_user_nonce', 'nonce');
 
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('Keine Berechtigung');
+        $user_id = intval($_POST['user_id']);
+        $current_user_id = get_current_user_id();
+
+        // Benutzer darf nur seinen eigenen Private Key sehen, oder Admin darf alle sehen
+        if ($current_user_id !== $user_id && !current_user_can('manage_options')) {
+            wp_send_json_error('Keine Berechtigung - Sie können nur Ihren eigenen Private Key sehen');
         }
 
         if (get_option('suw_allow_private_key_export', '1') !== '1') {
             wp_send_json_error('Private Key Export ist deaktiviert');
         }
-
-        $user_id = intval($_POST['user_id']);
 
         $wallet_manager = new SUW_Wallet_Manager();
         $result = $wallet_manager->export_private_key($user_id);
