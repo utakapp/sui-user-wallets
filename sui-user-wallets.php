@@ -3,7 +3,7 @@
  * Plugin Name: Sui User Wallets
  * Plugin URI: https://github.com/utakapp/sui-user-wallets
  * Description: Automatische Sui Wallet-Verwaltung für WordPress User - Custodial Wallets
- * Version: 1.0.9
+ * Version: 1.0.10
  * Author: utakapp
  * Author URI: https://github.com/utakapp
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin Konstanten
-define('SUW_VERSION', '1.0.9');
+define('SUW_VERSION', '1.0.10');
 define('SUW_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SUW_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -499,8 +499,8 @@ class Sui_User_Wallets {
                     <th>Wallet Address</th>
                     <td>
                         <input type="text" value="<?php echo esc_attr($wallet['address']); ?>"
-                               class="regular-text" readonly />
-                        <button type="button" class="button" onclick="navigator.clipboard.writeText('<?php echo esc_js($wallet['address']); ?>')">
+                               id="suw-wallet-address-<?php echo $user->ID; ?>" class="regular-text" readonly />
+                        <button type="button" class="button suw-copy-address" data-address="<?php echo esc_attr($wallet['address']); ?>" data-user-id="<?php echo $user->ID; ?>">
                             Copy
                         </button>
                     </td>
@@ -609,6 +609,56 @@ class Sui_User_Wallets {
                     btn.prop('disabled', false).text('Refresh');
                 });
             });
+
+            // Copy Wallet Address
+            $('.suw-copy-address').on('click', function() {
+                var btn = $(this);
+                var address = btn.data('address');
+                var originalText = btn.text();
+
+                // Try modern clipboard API
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(address).then(function() {
+                        // Success feedback
+                        btn.text('✓ Copied!').css('color', 'green');
+                        setTimeout(function() {
+                            btn.text(originalText).css('color', '');
+                        }, 2000);
+                    }).catch(function(err) {
+                        // Fallback for errors
+                        copyToClipboardFallback(address, btn, originalText);
+                    });
+                } else {
+                    // Fallback for older browsers
+                    copyToClipboardFallback(address, btn, originalText);
+                }
+            });
+
+            // Fallback copy method
+            function copyToClipboardFallback(text, btn, originalText) {
+                var userId = btn.data('user-id');
+                var input = $('#suw-wallet-address-' + userId);
+                input.select();
+                try {
+                    var successful = document.execCommand('copy');
+                    if (successful) {
+                        btn.text('✓ Copied!').css('color', 'green');
+                        setTimeout(function() {
+                            btn.text(originalText).css('color', '');
+                        }, 2000);
+                    } else {
+                        btn.text('✗ Failed').css('color', 'red');
+                        setTimeout(function() {
+                            btn.text(originalText).css('color', '');
+                        }, 2000);
+                    }
+                } catch (err) {
+                    btn.text('✗ Failed').css('color', 'red');
+                    setTimeout(function() {
+                        btn.text(originalText).css('color', '');
+                    }, 2000);
+                }
+            }
         });
         </script>
         <?php
@@ -718,12 +768,62 @@ class Sui_User_Wallets {
         ?>
         <div class="sui-user-wallet">
             <h3>Meine Sui Wallet</h3>
-            <p><strong>Adresse:</strong> <code><?php echo esc_html($wallet['address']); ?></code></p>
+            <p><strong>Adresse:</strong> <code id="suw-frontend-address-<?php echo $user_id; ?>"><?php echo esc_html($wallet['address']); ?></code></p>
             <p><strong>Balance:</strong> <?php echo esc_html($wallet['cached_balance']); ?> SUI</p>
-            <button onclick="navigator.clipboard.writeText('<?php echo esc_js($wallet['address']); ?>')">
+            <button type="button" class="suw-copy-btn" id="suw-copy-frontend-<?php echo $user_id; ?>" data-address="<?php echo esc_attr($wallet['address']); ?>">
                 Adresse kopieren
             </button>
         </div>
+        <script>
+        (function() {
+            var btn = document.getElementById('suw-copy-frontend-<?php echo $user_id; ?>');
+            var address = btn.getAttribute('data-address');
+
+            btn.addEventListener('click', function() {
+                var originalText = btn.textContent;
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(address).then(function() {
+                        btn.textContent = '✓ Kopiert!';
+                        btn.style.color = 'green';
+                        setTimeout(function() {
+                            btn.textContent = originalText;
+                            btn.style.color = '';
+                        }, 2000);
+                    }).catch(function() {
+                        fallbackCopy();
+                    });
+                } else {
+                    fallbackCopy();
+                }
+
+                function fallbackCopy() {
+                    var input = document.createElement('input');
+                    input.value = address;
+                    document.body.appendChild(input);
+                    input.select();
+                    try {
+                        var successful = document.execCommand('copy');
+                        if (successful) {
+                            btn.textContent = '✓ Kopiert!';
+                            btn.style.color = 'green';
+                        } else {
+                            btn.textContent = '✗ Fehler';
+                            btn.style.color = 'red';
+                        }
+                    } catch (err) {
+                        btn.textContent = '✗ Fehler';
+                        btn.style.color = 'red';
+                    }
+                    document.body.removeChild(input);
+                    setTimeout(function() {
+                        btn.textContent = originalText;
+                        btn.style.color = '';
+                    }, 2000);
+                }
+            });
+        })();
+        </script>
         <?php
         return ob_get_clean();
     }
