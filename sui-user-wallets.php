@@ -3,7 +3,7 @@
  * Plugin Name: Sui User Wallets
  * Plugin URI: https://github.com/utakapp/sui-user-wallets
  * Description: Automatische Sui Wallet-Verwaltung für WordPress User - Custodial Wallets
- * Version: 1.0.10
+ * Version: 1.0.11
  * Author: utakapp
  * Author URI: https://github.com/utakapp
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin Konstanten
-define('SUW_VERSION', '1.0.10');
+define('SUW_VERSION', '1.0.11');
 define('SUW_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SUW_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -54,6 +54,7 @@ class Sui_User_Wallets {
         add_action('show_user_profile', array($this, 'show_user_wallet_fields'));
         add_action('edit_user_profile', array($this, 'show_user_wallet_fields'));
         add_action('user_register', array($this, 'auto_create_wallet_on_registration'));
+        add_action('delete_user', array($this, 'delete_user_wallet'));
 
         // AJAX
         add_action('wp_ajax_suw_create_wallet', array($this, 'ajax_create_wallet'));
@@ -681,6 +682,38 @@ class Sui_User_Wallets {
             $email_notifications->send_wallet_created_email($user_id, $result['address']);
         } else {
             error_log('[Sui User Wallets] Failed to auto-create wallet for user ' . $user_id . ': ' . $result['error']);
+        }
+    }
+
+    // Automatische Wallet-Löschung bei User-Deletion
+    public function delete_user_wallet($user_id) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'sui_user_wallets';
+
+        // Hole Wallet-Info für Logging
+        $wallet = $wpdb->get_row($wpdb->prepare(
+            "SELECT wallet_address FROM $table_name WHERE user_id = %d",
+            $user_id
+        ));
+
+        if ($wallet) {
+            // Lösche Wallet aus Datenbank
+            $deleted = $wpdb->delete(
+                $table_name,
+                array('user_id' => $user_id),
+                array('%d')
+            );
+
+            if ($deleted !== false) {
+                error_log('[Sui User Wallets] Deleted wallet for user ' . $user_id . ': ' . $wallet->wallet_address);
+
+                // Optional: Trigger action for other plugins to clean up
+                do_action('suw_wallet_deleted', $user_id, $wallet->wallet_address);
+            } else {
+                error_log('[Sui User Wallets] Failed to delete wallet for user ' . $user_id);
+            }
+        } else {
+            error_log('[Sui User Wallets] No wallet found for deleted user ' . $user_id);
         }
     }
 
