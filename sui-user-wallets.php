@@ -3,7 +3,7 @@
  * Plugin Name: Sui User Wallets
  * Plugin URI: https://github.com/utakapp/sui-user-wallets
  * Description: Automatische Sui Wallet-Verwaltung für WordPress User - Custodial Wallets
- * Version: 1.0.12
+ * Version: 1.0.13
  * Author: utakapp
  * Author URI: https://github.com/utakapp
  * License: GPL v2 or later
@@ -22,12 +22,20 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Plugin Konstanten
-define('SUW_VERSION', '1.0.12');
-define('SUW_PLUGIN_DIR', plugin_dir_path(__FILE__));
-define('SUW_PLUGIN_URL', plugin_dir_url(__FILE__));
+// Plugin Konstanten (mit Guards gegen Doppel-Definition)
+if (!defined('SUW_VERSION')) {
+    define('SUW_VERSION', '1.0.13');
+}
+if (!defined('SUW_PLUGIN_DIR')) {
+    define('SUW_PLUGIN_DIR', plugin_dir_path(__FILE__));
+}
+if (!defined('SUW_PLUGIN_URL')) {
+    define('SUW_PLUGIN_URL', plugin_dir_url(__FILE__));
+}
 
-// Haupt-Plugin-Klasse
+// Haupt-Plugin-Klasse (mit Guard gegen Doppel-Definition)
+if (!class_exists('Sui_User_Wallets')) {
+
 class Sui_User_Wallets {
 
     private static $instance = null;
@@ -922,5 +930,9 @@ class Sui_User_Wallets {
     }
 }
 
+} // Ende class_exists('Sui_User_Wallets')
+
 // Initialisieren
-add_action('plugins_loaded', array('Sui_User_Wallets', 'get_instance'));
+if (class_exists('Sui_User_Wallets')) {
+    add_action('plugins_loaded', array('Sui_User_Wallets', 'get_instance'));
+}
