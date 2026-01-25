@@ -38,6 +38,7 @@ class SUW_Auto_Updater {
         // Add "Check for Updates" link in plugin row
         add_filter('plugin_row_meta', array($this, 'plugin_row_meta'), 10, 2);
         add_action('admin_init', array($this, 'handle_manual_update_check'));
+        add_action('admin_notices', array($this, 'update_check_notice'));
     }
 
     /**
@@ -262,12 +263,46 @@ class SUW_Auto_Updater {
         // Lösche WordPress Update-Cache
         delete_site_transient('update_plugins');
 
+        // Force check for updates
+        $remote_info = $this->get_repository_info();
+        $has_update = false;
+
+        if ($remote_info && version_compare($this->version, $remote_info['version'], '<')) {
+            $has_update = true;
+        }
+
         // Redirect mit Erfolgs-Nachricht
         wp_redirect(add_query_arg(
-            array('suw_update_check' => 'success'),
+            array(
+                'suw_update_check' => 'success',
+                'suw_has_update' => $has_update ? '1' : '0',
+                'suw_latest_version' => $remote_info ? $remote_info['version'] : ''
+            ),
             admin_url('plugins.php')
         ));
         exit;
+    }
+
+    /**
+     * Zeige Update-Check Notice
+     */
+    public function update_check_notice() {
+        if (!isset($_GET['suw_update_check']) || $_GET['suw_update_check'] !== 'success') {
+            return;
+        }
+
+        $has_update = isset($_GET['suw_has_update']) && $_GET['suw_has_update'] === '1';
+        $latest_version = isset($_GET['suw_latest_version']) ? sanitize_text_field($_GET['suw_latest_version']) : '';
+
+        if ($has_update) {
+            echo '<div class="notice notice-warning is-dismissible">';
+            echo '<p><strong>Sui User Wallets:</strong> Ein Update ist verfügbar! Version ' . esc_html($latest_version) . ' kann jetzt installiert werden. Aktuelle Version: ' . esc_html($this->version) . '</p>';
+            echo '</div>';
+        } else {
+            echo '<div class="notice notice-success is-dismissible">';
+            echo '<p><strong>Sui User Wallets:</strong> Du verwendest bereits die neueste Version (' . esc_html($this->version) . ').</p>';
+            echo '</div>';
+        }
     }
 }
 
