@@ -3,7 +3,7 @@
  * Plugin Name: Sui User Wallets
  * Plugin URI: https://github.com/utakapp/sui-user-wallets
  * Description: Automatische Sui Wallet-Verwaltung für WordPress User - Custodial Wallets
- * Version: 1.0.13
+ * Version: 1.0.14
  * Author: utakapp
  * Author URI: https://github.com/utakapp
  * License: GPL v2 or later
@@ -24,7 +24,7 @@ if (!defined('ABSPATH')) {
 
 // Plugin Konstanten (mit Guards gegen Doppel-Definition)
 if (!defined('SUW_VERSION')) {
-    define('SUW_VERSION', '1.0.13');
+    define('SUW_VERSION', '1.0.14');
 }
 if (!defined('SUW_PLUGIN_DIR')) {
     define('SUW_PLUGIN_DIR', plugin_dir_path(__FILE__));
@@ -48,10 +48,6 @@ class Sui_User_Wallets {
     }
 
     private function __construct() {
-        // Aktivierung & Deaktivierung
-        register_activation_hook(__FILE__, array($this, 'activate'));
-        register_deactivation_hook(__FILE__, array($this, 'deactivate'));
-
         // Lade Klassen
         $this->load_classes();
 
@@ -96,18 +92,18 @@ class Sui_User_Wallets {
     }
 
     // Plugin Aktivierung
-    public function activate() {
-        $this->create_tables();
-        $this->set_default_options();
+    public static function activate() {
+        self::create_tables_static();
+        self::set_default_options_static();
     }
 
     // Plugin Deaktivierung
-    public function deactivate() {
+    public static function deactivate() {
         // Cleanup falls nötig
     }
 
-    // Erstelle DB Tabellen
-    private function create_tables() {
+    // Erstelle DB Tabellen (statische Version für Aktivierung)
+    private static function create_tables_static() {
         global $wpdb;
         $table_name = $wpdb->prefix . 'sui_user_wallets';
         $charset_collate = $wpdb->get_charset_collate();
@@ -117,6 +113,7 @@ class Sui_User_Wallets {
             user_id bigint(20) NOT NULL,
             wallet_address varchar(66) NOT NULL,
             encrypted_private_key text NOT NULL,
+            encryption_key varchar(255) NOT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             last_balance_check datetime DEFAULT NULL,
             cached_balance varchar(50) DEFAULT '0',
@@ -127,6 +124,11 @@ class Sui_User_Wallets {
 
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+    }
+
+    // Erstelle DB Tabellen (Legacy-Wrapper für Kompatibilität)
+    private function create_tables() {
+        self::create_tables_static();
     }
 
     // Prüfe ob Datenbanktabelle existiert
@@ -255,11 +257,17 @@ class Sui_User_Wallets {
     }
 
     // Setze Default-Optionen
-    private function set_default_options() {
+    // Setze Standard-Optionen (statische Version für Aktivierung)
+    private static function set_default_options_static() {
         add_option('suw_auto_create_on_registration', '1');
         add_option('suw_allow_private_key_export', '1');
         add_option('suw_encryption_enabled', '1');
         add_option('suw_network', 'testnet');
+    }
+
+    // Setze Standard-Optionen (Legacy-Wrapper für Kompatibilität)
+    private function set_default_options() {
+        self::set_default_options_static();
     }
 
     // Admin Menü
@@ -931,6 +939,12 @@ class Sui_User_Wallets {
 }
 
 } // Ende class_exists('Sui_User_Wallets')
+
+// Activation & Deactivation Hooks (müssen außerhalb der Klasse registriert werden)
+if (class_exists('Sui_User_Wallets')) {
+    register_activation_hook(__FILE__, array('Sui_User_Wallets', 'activate'));
+    register_deactivation_hook(__FILE__, array('Sui_User_Wallets', 'deactivate'));
+}
 
 // Initialisieren
 if (class_exists('Sui_User_Wallets')) {
